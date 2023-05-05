@@ -2,15 +2,17 @@ package ssh
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	"github.com/kallepan/ssh-honeypot/conf"
 	"golang.org/x/crypto/ssh"
 )
+
+var ErrorLog = conf.ErrorLog
+var Info = conf.Log
 
 func cleanCommand(cmd string) string {
 	// For now, allow all commands
@@ -26,19 +28,22 @@ func handleServerConn(authType string, chans <-chan ssh.NewChannel) {
 
 		channel, requests, err := newChan.Accept()
 		if err != nil {
-			// TODO Handle Error
+			ErrorLog.Printf("Could not accept channel: %v", err)
 			continue
 		}
 
 		go func(in <-chan *ssh.Request) {
-			defer channel.Close()
+			defer func() {
+				_ = channel.Close()
+			}()
 			for req := range in {
 				payload := cleanCommand(string(req.Payload))
 
 				// Log the request
-				log.Panicf(authType, payload)
+				Info.Println(authType, payload)
 
 				// TODO Handle request
+
 				channel.SendRequest("exit-status", true, []byte{0, 0, 0, 0})
 			}
 		}(requests)
@@ -48,7 +53,7 @@ func handleServerConn(authType string, chans <-chan ssh.NewChannel) {
 func listen(config *ssh.ServerConfig, port int) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		log.Fatal(err)
+		ErrorLog.Fatal(err)
 	}
 
 	for {
@@ -72,7 +77,45 @@ func listen(config *ssh.ServerConfig, port int) {
 	}
 }
 
-func Listen(opts SSHOpts) {
+func setupHostKeys(algorithms []string, dir string) ([]ssh.Signer, error) {
+	err := os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
+
+	var hostkeys []ssh.Signer
+	for _, algorithm := range algorithms {
+		keypath := filepath.Join(dir, fmt.Sprintf("ssh_host_%s_key", algorithm))
+		if _, err := os.Stat(keypath); err != nil {
+			Info.Printf("Generating %s key", algorithm)
+			// Keys do not exist, generate them
+			_, err := exec.Command("ssh-keygen", "-t", algorithm, "-f", keypath, "-N", "").Output()
+			if err != nil {
+				ErrorLog.Printf("Could not generate %s key: %v", algorithm, err)
+				continue
+			}
+
+			ErrorLog.Printf("Generated %s key in %s", algorithm, keypath)
+		}
+
+		keyData, err := os.ReadFile(keypath)
+		if err != nil {
+			ErrorLog.Fatalf("Could not read %s key: %v", algorithm, err)
+			return nil, err
+		}
+		signer, err := ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			ErrorLog.Fatalf("Could not parse %s key: %v", algorithm, err)
+			return nil, err
+		}
+
+		hostkeys = append(hostkeys, signer)
+	}
+
+	return hostkeys, nil
+}
+
+func Listen(opts conf.SSHOpts) {
 	// Listen for SSH connections
 	config := &ssh.ServerConfig{
 		Config: ssh.Config{
@@ -97,29 +140,17 @@ func Listen(opts SSHOpts) {
 	// Add host key
 	wd, err := os.Getwd()
 	if err != nil {
-		log.Fatal("Could not get working directory")
+		ErrorLog.Fatal("Could not get working directory")
 	}
-	keyPath := filepath.Join(wd, "ssh/id_rsa")
-	if _, err := os.Stat(keyPath); err != nil {
-		os.Mkdir(filepath.Join(wd, "ssh"), os.ModePerm)
+	hostkeys, err := setupHostKeys(opts.ServerAlgorithms, filepath.Join(wd, "keys"))
 
-		_, err := exec.Command("ssh-keygen", "-t", "rsa", "-b", "4096", "-f", keyPath, "-N", "").Output()
-		if err != nil {
-			log.Fatal(fmt.Sprintf("Failed to generate key: %s", err))
-		}
-		fmt.Println(fmt.Sprintf("Generated key in %s", keyPath))
-	}
-
-	privateBytes, err := ioutil.ReadFile(keyPath)
 	if err != nil {
-		log.Fatal("Failed to load private key")
-	}
-	private, err := ssh.ParsePrivateKey(privateBytes)
-	if err != nil {
-		log.Fatal("Failed to parse private key")
+		ErrorLog.Fatal(fmt.Sprintf("Could not setup host keys: %v", err))
 	}
 
-	config.AddHostKey(private)
+	for _, key := range hostkeys {
+		config.AddHostKey(key)
+	}
 
 	// Finally listen for connections
 	go listen(config, opts.Port)
