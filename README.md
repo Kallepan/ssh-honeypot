@@ -4,4 +4,10 @@
 
 ## USAGE
 
+### the client is run with the following command
+
+```bash
+go run client.go <username> <port> <command>
+```
+
 - TDB
