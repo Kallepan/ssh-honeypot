@@ -4,115 +4,90 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/kallepan/ssh-honeypot/conf"
+	"github.com/kallepan/ssh-honeypot/fakeshell"
+	"github.com/kallepan/ssh-honeypot/logger"
 	"golang.org/x/crypto/ssh"
 )
 
-var ErrorLog = conf.ErrorLog
-var Info = conf.Log
-
 func cleanCommand(cmd string) string {
 	// For now, allow all commands
+	strings.TrimLeft(cmd, "'()")
 	return cmd
 }
 
-func handleServerConn(authType string, chans <-chan ssh.NewChannel) {
+// handle the incoming ssh connection and present a fake shell
+func handleServerConn(user string, remoteAddr string, chans <-chan ssh.NewChannel) {
 	for newChan := range chans {
+		// Only allow session channels
 		if newChan.ChannelType() != "session" {
-			newChan.Reject(ssh.UnknownChannelType, "unknown channel type")
+			newChan.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", newChan.ChannelType()))
 			continue
 		}
 
-		channel, requests, err := newChan.Accept()
+		connection, requests, err := newChan.Accept()
 		if err != nil {
-			ErrorLog.Printf("Could not accept channel: %v", err)
+			logger.Errf("Could not accept channel: %v", err)
 			continue
 		}
 
-		go func(in <-chan *ssh.Request) {
-			defer func() {
-				_ = channel.Close()
-			}()
-			for req := range in {
-				payload := cleanCommand(string(req.Payload))
+		// Create fake shell
+		fakeshell.FakeShell(connection, requests, user, remoteAddr)
 
-				// Log the request
-				Info.Println(authType, payload)
+		go func() {
+			for req := range requests {
+				switch req.Type {
+				case "shell":
+					// Only accept the default shell. Commands are ignored
+					if len(req.Payload) == 0 {
+						req.Reply(true, nil)
+					}
+				case "pty-req":
 
-				// TODO Handle request
-
-				channel.SendRequest("exit-status", true, []byte{0, 0, 0, 0})
+					req.Reply(true, nil)
+				}
 			}
-		}(requests)
+		}()
+
 	}
 }
 
 func listen(config *ssh.ServerConfig, port int) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+
 	if err != nil {
-		ErrorLog.Fatal(err)
+		logger.Fatal(err.Error())
 	}
 
 	for {
 		// Accept connections
 		conn, err := listener.Accept()
 		if err != nil {
-			// TODO Handle Error
+			logger.Errf("Could not accept connection: %v", err)
 			continue
 		}
 
 		// Handshake
 		sConn, chans, reqs, err := ssh.NewServerConn(conn, config)
 		if err != nil {
-			// TODO Handle Error
+			logger.Errf("Could not handshake: %v", err)
 			continue
 		}
 
+		logger.Infof("New connection from %s (%s) as %s authenticated with %s",
+			sConn.RemoteAddr(),
+			sConn.ClientVersion(),
+			sConn.User(),
+			sConn.Permissions.Extensions["auth-type"],
+		)
+
 		// Incoming requests
-		go ssh.DiscardRequests(reqs)
-		go handleServerConn(sConn.Permissions.Extensions["auth-type"], chans)
+		go ssh.DiscardRequests(reqs) // These are not used
+		go handleServerConn(sConn.User(), sConn.RemoteAddr().String(), chans)
 	}
-}
-
-func setupHostKeys(algorithms []string, dir string) ([]ssh.Signer, error) {
-	err := os.MkdirAll(dir, os.ModePerm)
-	if err != nil {
-		return nil, err
-	}
-
-	var hostkeys []ssh.Signer
-	for _, algorithm := range algorithms {
-		keypath := filepath.Join(dir, fmt.Sprintf("ssh_host_%s_key", algorithm))
-		if _, err := os.Stat(keypath); err != nil {
-			Info.Printf("Generating %s key", algorithm)
-			// Keys do not exist, generate them
-			_, err := exec.Command("ssh-keygen", "-t", algorithm, "-f", keypath, "-N", "").Output()
-			if err != nil {
-				ErrorLog.Printf("Could not generate %s key: %v", algorithm, err)
-				continue
-			}
-
-			ErrorLog.Printf("Generated %s key in %s", algorithm, keypath)
-		}
-
-		keyData, err := os.ReadFile(keypath)
-		if err != nil {
-			ErrorLog.Fatalf("Could not read %s key: %v", algorithm, err)
-			return nil, err
-		}
-		signer, err := ssh.ParsePrivateKey(keyData)
-		if err != nil {
-			ErrorLog.Fatalf("Could not parse %s key: %v", algorithm, err)
-			return nil, err
-		}
-
-		hostkeys = append(hostkeys, signer)
-	}
-
-	return hostkeys, nil
 }
 
 func Listen(opts conf.SSHOpts) {
@@ -124,28 +99,23 @@ func Listen(opts conf.SSHOpts) {
 		},
 		PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			// Simulate an accepted key
-			return &ssh.Permissions{Extensions: map[string]string{"auth-type": "key-0"}}, nil
+			return &ssh.Permissions{Extensions: map[string]string{"auth-type": "key"}}, nil
 		},
 		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			// Simulate an accepted password
-			return &ssh.Permissions{Extensions: map[string]string{"auth-type": "pass-0"}}, nil
-		},
-		NoClientAuth: true,
-		NoClientAuthCallback: func(conn ssh.ConnMetadata) (*ssh.Permissions, error) {
-			// Simulate an accepted key
-			return &ssh.Permissions{Extensions: map[string]string{"auth-type": "anon-0"}}, nil
+			return &ssh.Permissions{Extensions: map[string]string{"auth-type": "pass"}}, nil
 		},
 	}
 
 	// Add host key
 	wd, err := os.Getwd()
 	if err != nil {
-		ErrorLog.Fatal("Could not get working directory")
+		logger.Fatal("Could not get working directory")
 	}
-	hostkeys, err := setupHostKeys(opts.ServerAlgorithms, filepath.Join(wd, "keys"))
+	hostkeys, err := conf.SetupHostKeys(opts.ServerAlgorithms, filepath.Join(wd, "keys"))
 
 	if err != nil {
-		ErrorLog.Fatal(fmt.Sprintf("Could not setup host keys: %v", err))
+		logger.Fatal(fmt.Sprintf("Could not setup host keys: %v", err))
 	}
 
 	for _, key := range hostkeys {
@@ -153,5 +123,6 @@ func Listen(opts conf.SSHOpts) {
 	}
 
 	// Finally listen for connections
-	go listen(config, opts.Port)
+
+	listen(config, opts.Port)
 }
