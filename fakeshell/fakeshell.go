@@ -3,8 +3,10 @@ package fakeshell
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"strings"
 
+	"github.com/kallepan/ssh-honeypot/conf"
 	"github.com/kallepan/ssh-honeypot/logger"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
@@ -20,6 +22,17 @@ func Write(w io.Writer, str string) {
 
 // create a fake shell where the ssh user can "execute" commands
 func FakeShell(s ssh.Channel, reqs <-chan *ssh.Request, user string, remoteAddr string) {
+	pathToCmds := conf.GetValueFromEnv("PATH_TO_CMDS")
+	if pathToCmds == "" {
+		pathToCmds = "conf/cmds.txt"
+	}
+
+	bytes, err := ioutil.ReadFile(pathToCmds)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Could not read file: %s", pathToCmds))
+	}
+	commandsList := strings.Split(string(bytes), "\n")
+
 	term := term.NewTerminal(s, fmt.Sprintf(
 		"%s%s@%s>%s ",
 		"\x1b[0m", // green
@@ -43,18 +56,22 @@ func FakeShell(s ssh.Channel, reqs <-chan *ssh.Request, user string, remoteAddr 
 		command := commandAndArgs[0]
 		unknown := true
 
+		for _, cmd := range commandsList {
+			if cmd == command {
+				unknown = false
+				break
+			}
+		}
+
 		if unknown {
 			Write(term, fmt.Sprintf("bash: %s: command not found\n", command))
-			Write(term, "1")
 		}
 	}
 
-	_, err := term.Write([]byte("logout\n"))
+	_, err = term.Write([]byte("logout\n"))
 	if err != nil {
-		// Does not matter still close the connection
 		s.Close()
 		return
 	}
-
 	s.Close()
 }

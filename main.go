@@ -9,8 +9,8 @@ import (
 )
 
 func main() {
-	conf.LoadEnv()
 	logger.StartLogger()
+	conf.LoadEnv()
 	sshOpts := conf.GetOpts()
 
 	logger.Info("Starting SSH honeypot")
