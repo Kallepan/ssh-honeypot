@@ -13,4 +13,4 @@ FROM alpine:latest
 COPY --from=builder /project/ssh-honeypot/build/main /app/build/main
 
 EXPOSE 2222
-ENTRYPOINT [ "/app/build/main" ]
+ENTRYPOINT [ "/app/build/main", "--prod" ]

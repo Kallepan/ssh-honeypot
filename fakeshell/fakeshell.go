@@ -23,6 +23,7 @@ func Write(w io.Writer, str string) {
 // create a fake shell where the ssh user can "execute" commands
 func FakeShell(s ssh.Channel, reqs <-chan *ssh.Request, user string, remoteAddr string) {
 	pathToCmds := conf.GetValueFromEnv("PATH_TO_CMDS")
+	host := conf.GetValueFromEnv("SSH_HOST")
 	if pathToCmds == "" {
 		pathToCmds = "conf/cmds.txt"
 	}
@@ -34,10 +35,10 @@ func FakeShell(s ssh.Channel, reqs <-chan *ssh.Request, user string, remoteAddr 
 	commandsList := strings.Split(string(bytes), "\n")
 
 	term := term.NewTerminal(s, fmt.Sprintf(
-		"%s%s@%s>%s ",
+		"%s%s@%s:~#%s ",
 		"\x1b[0m", // green
 		user,
-		"localhost",
+		host,
 		"\x1b[0m",
 	))
 
