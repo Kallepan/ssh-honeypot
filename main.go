@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+	conf.LoadEnv()
 	logger.StartLogger()
 	sshOpts := conf.GetOpts()
 

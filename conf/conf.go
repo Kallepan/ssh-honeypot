@@ -1,5 +1,7 @@
 package conf
 
+import "strconv"
+
 type SSHOpts struct {
 	ServerCiphers    []string
 	ServerMACs       []string
@@ -8,8 +10,13 @@ type SSHOpts struct {
 }
 
 func GetOpts() SSHOpts {
+	port, err := strconv.Atoi(GetValueFromEnv("SSH_PORT"))
+	if err != nil {
+		port = 22
+	}
+
 	sshOpts := SSHOpts{
-		Port: 2222,
+		Port: port,
 		ServerMACs: []string{
 			"hmac-sha2-256-etm@openssh.com",
 			"hmac-sha2-256",
