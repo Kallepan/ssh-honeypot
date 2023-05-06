@@ -20,7 +20,7 @@ func SetupHostKeys(algorithms []string, dir string) ([]ssh.Signer, error) {
 	for _, algorithm := range algorithms {
 		keypath := filepath.Join(dir, fmt.Sprintf("ssh_host_%s_key", algorithm))
 		if _, err := os.Stat(keypath); err != nil {
-			logger.Logf("Generating %s key", algorithm)
+			logger.Infof("Generating %s key", algorithm)
 			// Keys do not exist, generate them
 			_, err := exec.Command("ssh-keygen", "-t", algorithm, "-f", keypath, "-N", "").Output()
 			if err != nil {

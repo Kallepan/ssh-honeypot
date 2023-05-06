@@ -13,11 +13,11 @@ var (
 	errorLogger *log.Logger
 )
 
-func Logf(format string, v ...interface{}) {
+func Infof(format string, v ...interface{}) {
 	logger.Printf(format, v...)
 }
 
-func Log(format string) {
+func Info(format string) {
 	logger.Printf(format)
 }
 
