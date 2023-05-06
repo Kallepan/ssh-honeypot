@@ -1,13 +1,11 @@
 # SSH Honeypot
 
-- This is a simple SSH honeypot written in GoLang. It is based on the [ssh](https://godoc.org/golang.org/x/crypto/ssh) package from the Go standard library. It is designed to be run in a docker container.
+## Description
 
-## USAGE
+This is a simple SSH honeypot written in GoLang. It accepts any username/password and username/key combination. It logs authentication attempts to a file. Furthermore, a fake shell is provided to the attacker, which logs all commands to a file. Allowed commands can be configured in the config/cmds.txt file.
 
-### the client is run with the following command
+The project can be built inside a Docker container. The Dockerfile is provided.
 
-```bash
-go run client.go <username> <port> <command>
-```
+## Usage
 
-- TDB
+Configure the honeypot by editing the .env file.
