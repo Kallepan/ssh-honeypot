@@ -12,7 +12,7 @@ type SSHOpts struct {
 func GetOpts() SSHOpts {
 	port, err := strconv.Atoi(GetValueFromEnv("SSH_PORT"))
 	if err != nil {
-		port = 22
+		port = 2222
 	}
 
 	sshOpts := SSHOpts{

@@ -60,6 +60,7 @@ func listen(config *ssh.ServerConfig, port int) {
 
 	if err != nil {
 		logger.Fatal(err.Error())
+		return
 	}
 
 	for {

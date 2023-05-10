@@ -23,4 +23,5 @@ func main() {
 	logger.Info("Starting SSH honeypot")
 	println(fmt.Sprintf("Starting SSH honeypot on port %d\n", sshOpts.Port))
 	ssh.Listen(sshOpts)
+
 }
