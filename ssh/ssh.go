@@ -46,7 +46,6 @@ func handleServerConn(user string, remoteAddr string, chans <-chan ssh.NewChanne
 						req.Reply(true, nil)
 					}
 				case "pty-req":
-
 					req.Reply(true, nil)
 				}
 			}
@@ -78,6 +77,7 @@ func listen(config *ssh.ServerConfig, port int) {
 			continue
 		}
 
+		// Log connection
 		logger.Infof("New connection from %s (%s) as %s authenticated with %s",
 			sConn.RemoteAddr(),
 			sConn.ClientVersion(),
@@ -100,10 +100,12 @@ func Listen(opts conf.SSHOpts) {
 		},
 		PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			// Simulate an accepted key
+			logger.Infof("Accepted key from %s", conn.RemoteAddr())
 			return &ssh.Permissions{Extensions: map[string]string{"auth-type": "key"}}, nil
 		},
 		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			// Simulate an accepted password
+			logger.Infof("Accepted password from %s", conn.RemoteAddr())
 			return &ssh.Permissions{Extensions: map[string]string{"auth-type": "pass"}}, nil
 		},
 	}
@@ -124,6 +126,5 @@ func Listen(opts conf.SSHOpts) {
 	}
 
 	// Finally listen for connections
-
 	listen(config, opts.Port)
 }
