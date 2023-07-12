@@ -24,16 +24,23 @@ func Write(w io.Writer, str string) {
 func FakeShell(s ssh.Channel, reqs <-chan *ssh.Request, user string, remoteAddr string) {
 	pathToCmds := conf.GetValueFromEnv("PATH_TO_CMDS")
 	host := conf.GetValueFromEnv("SSH_HOST")
+
+	// default values
+	if host == "" {
+		host = "localhost"
+	}
 	if pathToCmds == "" {
 		pathToCmds = "conf/cmds.txt"
 	}
 
+	// read commands from file
 	bytes, err := ioutil.ReadFile(pathToCmds)
 	if err != nil {
 		logger.Fatal(fmt.Sprintf("Could not read file: %s", pathToCmds))
 	}
 	commandsList := strings.Split(string(bytes), "\n")
 
+	// create terminal
 	term := term.NewTerminal(s, fmt.Sprintf(
 		"%s%s@%s:~#%s ",
 		"\x1b[0m", // green
