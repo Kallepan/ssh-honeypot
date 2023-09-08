@@ -21,6 +21,7 @@ func Write(w io.Writer, str string) {
 
 // create a fake shell where the ssh user can "execute" commands
 func FakeShell(s ssh.Channel, reqs <-chan *ssh.Request, user string, remoteAddr string) {
+	defer s.Close()
 	cmdFile := os.Getenv("CMDS_FILE")
 	host := os.Getenv("SSH_HOST")
 
@@ -43,9 +44,11 @@ func FakeShell(s ssh.Channel, reqs <-chan *ssh.Request, user string, remoteAddr 
 	for {
 		ln, err := term.ReadLine()
 		if err != nil {
+			logger.Errorf("Could not read line: %v", err)
 			break
 		}
 		if ln == "exit" {
+			logger.Infof("Host: %s, User %s closed connection", remoteAddr, user)
 			break
 		}
 
@@ -53,24 +56,20 @@ func FakeShell(s ssh.Channel, reqs <-chan *ssh.Request, user string, remoteAddr 
 
 		commandAndArgs := strings.Split(ln, " ")
 		command := commandAndArgs[0]
-		unknown := true
 
+		// check if command is in list of allowed commands
 		for _, cmd := range commands {
 			if cmd == command {
-				unknown = false
 				break
 			}
 		}
 
-		if unknown {
-			Write(term, fmt.Sprintf("bash: %s: command not found\n", command))
-		}
+		Write(term, fmt.Sprintf("bash: %s: command not found\n", command))
 	}
 
 	_, err = term.Write([]byte("logout\n"))
 	if err != nil {
-		s.Close()
+		logger.Errorf("Could not write to terminal: %v", err)
 		return
 	}
-	s.Close()
 }
