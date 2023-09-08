@@ -23,7 +23,7 @@ func SetupHostKeys(algorithms []string, dir string) ([]ssh.Signer, error) {
 				continue
 			}
 
-			logger.Errorf("Generated %s key in %s", algorithm, keypath)
+			logger.Infof("Generated %s key in %s", algorithm, keypath)
 		}
 
 		keyData, err := os.ReadFile(keypath)

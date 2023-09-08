@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/kallepan/ssh-honeypot/internal/config"
@@ -102,7 +103,7 @@ func Listen(opts config.SSHOpts) {
 	}
 
 	// Add host keys
-	hostkeys, err := config.SetupHostKeys(opts.ServerAlgorithms, os.Getenv("KEYS_PATH"))
+	hostkeys, err := config.SetupHostKeys(opts.ServerAlgorithms, filepath.Join("assets", "keys"))
 	if err != nil {
 		logger.Fatalf("Could not setup host keys: %v", err)
 	}
@@ -118,6 +119,7 @@ func Listen(opts config.SSHOpts) {
 		logger.Fatalf("Could not convert port to integer: %v", err)
 	}
 
+	logger.Infof("Listening on port %d", portInt)
 	// Finally listen for connections
 	listen(conf, portInt)
 }

@@ -1,0 +1,15 @@
+# common
+README.md
+CHANGELOG.md
+docker-compose.yml
+Dockerfile
+
+# git
+.git
+.gitattributes
+.gitignore
+
+# custom
+scripts/*
+*.env
+README.md

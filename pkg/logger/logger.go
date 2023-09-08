@@ -16,14 +16,9 @@ var (
 
 func Init() {
 	once.Do(func() {
-		logFile, err := os.OpenFile(os.Getenv("LOGS_FILE"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			log.Fatalf("Failed to open log file: %s", err)
-		}
-
-		CommonLog = log.New(logFile, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-		ErrorLog = log.New(logFile, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
-		FatalLog = log.New(logFile, "FATAL: ", log.Ldate|log.Ltime|log.Lshortfile)
+		CommonLog = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+		ErrorLog = log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+		FatalLog = log.New(os.Stderr, "FATAL: ", log.Ldate|log.Ltime|log.Lshortfile)
 	})
 }
 
