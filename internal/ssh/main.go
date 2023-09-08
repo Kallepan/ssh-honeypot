@@ -4,20 +4,13 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
-	"strings"
+	"strconv"
 
-	"github.com/kallepan/ssh-honeypot/conf"
-	"github.com/kallepan/ssh-honeypot/fakeshell"
-	"github.com/kallepan/ssh-honeypot/logger"
+	"github.com/kallepan/ssh-honeypot/internal/config"
+	"github.com/kallepan/ssh-honeypot/internal/fakeshell"
+	"github.com/kallepan/ssh-honeypot/pkg/logger"
 	"golang.org/x/crypto/ssh"
 )
-
-func cleanCommand(cmd string) string {
-	// For now, allow all commands
-	strings.TrimLeft(cmd, "'()")
-	return cmd
-}
 
 // handle the incoming ssh connection and present a fake shell
 func handleServerConn(user string, remoteAddr string, chans <-chan ssh.NewChannel) {
@@ -30,7 +23,7 @@ func handleServerConn(user string, remoteAddr string, chans <-chan ssh.NewChanne
 
 		connection, requests, err := newChan.Accept()
 		if err != nil {
-			logger.Errf("Could not accept channel: %v", err)
+			logger.Errorf("Could not accept channel: %v", err)
 			continue
 		}
 
@@ -54,26 +47,24 @@ func handleServerConn(user string, remoteAddr string, chans <-chan ssh.NewChanne
 	}
 }
 
-func listen(config *ssh.ServerConfig, port int) {
+func listen(conf *ssh.ServerConfig, port int) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-
 	if err != nil {
-		logger.Fatal(err.Error())
-		return
+		logger.Fatalf("Could not listen on port %d: %v", port, err)
 	}
 
 	for {
 		// Accept connections
 		conn, err := listener.Accept()
 		if err != nil {
-			logger.Errf("Could not accept connection: %v", err)
+			logger.Errorf("Could not accept connection: %v", err)
 			continue
 		}
 
 		// Handshake
-		sConn, chans, reqs, err := ssh.NewServerConn(conn, config)
+		sConn, chans, reqs, err := ssh.NewServerConn(conn, conf)
 		if err != nil {
-			logger.Errf("Could not handshake: %v", err)
+			logger.Errorf("Could not handshake: %v", err)
 			continue
 		}
 
@@ -91,9 +82,9 @@ func listen(config *ssh.ServerConfig, port int) {
 	}
 }
 
-func Listen(opts conf.SSHOpts) {
+func Listen(opts config.SSHOpts) {
 	// Listen for SSH connections
-	config := &ssh.ServerConfig{
+	conf := &ssh.ServerConfig{
 		Config: ssh.Config{
 			Ciphers: opts.ServerCiphers,
 			MACs:    opts.ServerMACs,
@@ -110,21 +101,23 @@ func Listen(opts conf.SSHOpts) {
 		},
 	}
 
-	// Add host key
-	wd, err := os.Getwd()
+	// Add host keys
+	hostkeys, err := config.SetupHostKeys(opts.ServerAlgorithms, os.Getenv("KEYS_PATH"))
 	if err != nil {
-		logger.Fatal("Could not get working directory")
-	}
-	hostkeys, err := conf.SetupHostKeys(opts.ServerAlgorithms, filepath.Join(wd, "keys"))
-
-	if err != nil {
-		logger.Fatal(fmt.Sprintf("Could not setup host keys: %v", err))
+		logger.Fatalf("Could not setup host keys: %v", err)
 	}
 
 	for _, key := range hostkeys {
-		config.AddHostKey(key)
+		conf.AddHostKey(key)
+	}
+
+	// Get port
+	port := os.Getenv("SSH_PORT")
+	portInt, err := strconv.Atoi(port)
+	if err != nil {
+		logger.Fatalf("Could not convert port to integer: %v", err)
 	}
 
 	// Finally listen for connections
-	listen(config, opts.Port)
+	listen(conf, portInt)
 }

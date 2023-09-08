@@ -1,4 +1,4 @@
-package conf
+package config
 
 import (
 	"fmt"
@@ -6,16 +6,11 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/kallepan/ssh-honeypot/logger"
+	"github.com/kallepan/ssh-honeypot/pkg/logger"
 	"golang.org/x/crypto/ssh"
 )
 
 func SetupHostKeys(algorithms []string, dir string) ([]ssh.Signer, error) {
-	err := os.MkdirAll(dir, os.ModePerm)
-	if err != nil {
-		return nil, err
-	}
-
 	var hostkeys []ssh.Signer
 	for _, algorithm := range algorithms {
 		keypath := filepath.Join(dir, fmt.Sprintf("ssh_host_%s_key", algorithm))
@@ -24,21 +19,21 @@ func SetupHostKeys(algorithms []string, dir string) ([]ssh.Signer, error) {
 			// Keys do not exist, generate them
 			_, err := exec.Command("ssh-keygen", "-t", algorithm, "-f", keypath, "-N", "").Output()
 			if err != nil {
-				logger.Errf("Could not generate %s key: %v", algorithm, err)
+				logger.Errorf("Could not generate %s key: %v", algorithm, err)
 				continue
 			}
 
-			logger.Errf("Generated %s key in %s", algorithm, keypath)
+			logger.Errorf("Generated %s key in %s", algorithm, keypath)
 		}
 
 		keyData, err := os.ReadFile(keypath)
 		if err != nil {
-			logger.Errf("Could not read %s key: %v", algorithm, err)
+			logger.Errorf("Could not read %s key: %v", algorithm, err)
 			return nil, err
 		}
 		signer, err := ssh.ParsePrivateKey(keyData)
 		if err != nil {
-			logger.Errf("Could not parse %s key: %v", algorithm, err)
+			logger.Errorf("Could not parse %s key: %v", algorithm, err)
 			return nil, err
 		}
 

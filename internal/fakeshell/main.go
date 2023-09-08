@@ -3,11 +3,10 @@ package fakeshell
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"strings"
 
-	"github.com/kallepan/ssh-honeypot/conf"
-	"github.com/kallepan/ssh-honeypot/logger"
+	"github.com/kallepan/ssh-honeypot/pkg/logger"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 )
@@ -22,23 +21,15 @@ func Write(w io.Writer, str string) {
 
 // create a fake shell where the ssh user can "execute" commands
 func FakeShell(s ssh.Channel, reqs <-chan *ssh.Request, user string, remoteAddr string) {
-	pathToCmds := conf.GetValueFromEnv("PATH_TO_CMDS")
-	host := conf.GetValueFromEnv("SSH_HOST")
-
-	// default values
-	if host == "" {
-		host = "localhost"
-	}
-	if pathToCmds == "" {
-		pathToCmds = "conf/cmds.txt"
-	}
+	cmdFile := os.Getenv("CMDS_FILE")
+	host := os.Getenv("SSH_HOST")
 
 	// read commands from file
-	bytes, err := ioutil.ReadFile(pathToCmds)
+	bytes, err := os.ReadFile(cmdFile)
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Could not read file: %s", pathToCmds))
+		logger.Fatalf("Could not read file: %s", cmdFile)
 	}
-	commandsList := strings.Split(string(bytes), "\n")
+	commands := strings.Split(string(bytes), "\n")
 
 	// create terminal
 	term := term.NewTerminal(s, fmt.Sprintf(
@@ -64,7 +55,7 @@ func FakeShell(s ssh.Channel, reqs <-chan *ssh.Request, user string, remoteAddr 
 		command := commandAndArgs[0]
 		unknown := true
 
-		for _, cmd := range commandsList {
+		for _, cmd := range commands {
 			if cmd == command {
 				unknown = false
 				break

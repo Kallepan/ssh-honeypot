@@ -8,4 +8,6 @@ The project can be built inside a Docker container. The Dockerfile is provided.
 
 ## Usage
 
-Configure the honeypot by editing the .env file.
+- Configure the honeypot by editing the .env.example file.
+- Copy the .env.example file to .env
+- Run scripts/launch.dev.sh to launch the development environment
